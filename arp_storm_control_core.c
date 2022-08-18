@@ -543,24 +543,28 @@ arp_sc_destroy(void)
 	arp_sc_mac_entry_ht_free();
 }
 
-static void
+static doca_error_t
 arp_sc_interactive_callback(void *config, void *param)
 {
 	arp_sc_info->interactive_mode = *(bool *)param;
+	return DOCA_SUCCESS;
 }
 
 void
 arp_sc_register_params(void)
 {
-	struct doca_argp_param interactive_param = {
-		.short_flag = "i",
-		.long_flag = "interactive",
-		.arguments = NULL,
-		.description = "Adds interactive mode for display",
-		.callback = arp_sc_interactive_callback,
-		.arg_type = DOCA_ARGP_TYPE_BOOLEAN,
-		.is_mandatory = false,
-		.is_cli_only = false};
+	struct doca_argp_param * interactive_param = NULL;
 
-	doca_argp_register_param(&interactive_param);
+	int ret = doca_argp_param_create(&interactive_param);
+	if (ret != DOCA_SUCCESS)
+		APP_EXIT("Failed to create ARGP param: %s", doca_get_error_string(ret));
+
+	doca_argp_param_set_short_name(interactive_param, "i");
+	doca_argp_param_set_long_name(interactive_param, "interactive");
+	doca_argp_param_set_description(interactive_param, "Adds interactive mode for display");
+	doca_argp_param_set_callback(interactive_param, arp_sc_interactive_callback);
+	doca_argp_param_set_type(interactive_param, DOCA_ARGP_TYPE_BOOLEAN);
+	ret = doca_argp_register_param(interactive_param);
+	if (ret != DOCA_SUCCESS)
+		APP_EXIT("Failed to register program param: %s", doca_get_error_string(ret));
 }

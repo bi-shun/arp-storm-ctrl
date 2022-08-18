@@ -131,6 +131,7 @@ arp_sc_setup_drop_pipe(struct doca_flow_port *port, struct doca_flow_pipe *trap_
 	struct doca_flow_error err = {0};
 	struct doca_flow_match match;
 	struct doca_flow_actions actions;
+	struct doca_flow_actions *actions_array[1];
 	struct doca_flow_fwd fw;
 	struct doca_flow_fwd miss_fw;
 	struct doca_flow_pipe_cfg pipe_cfg;
@@ -141,13 +142,15 @@ arp_sc_setup_drop_pipe(struct doca_flow_port *port, struct doca_flow_pipe *trap_
 	memset(&fw, 0, sizeof(fw));
 	memset(&miss_fw, 0, sizeof(miss_fw));
 	memset(&pipe_cfg, 0, sizeof(pipe_cfg));
+	actions_array[0] = &actions;
 
 	/* Populate pipe_cfg */
-	pipe_cfg.name = ARP_SC_DROP_PIPE_NAME;
+	pipe_cfg.attr.name = ARP_SC_DROP_PIPE_NAME;
+	pipe_cfg.attr.type = DOCA_FLOW_PIPE_BASIC;
+	pipe_cfg.attr.is_root = true; /* drop pipe is the root pipe */
 	pipe_cfg.match = &match;
-	pipe_cfg.actions = &actions;
+	pipe_cfg.actions = actions_array;
 	pipe_cfg.port = port;
-	pipe_cfg.is_root = true; /* drop pipe is the root pipe */
 
 	/* Populate match -
 	 * DMAC=bcast_mac, SMAC=variable_mac, eth_type=big_endian(0x806)
@@ -166,7 +169,7 @@ arp_sc_setup_drop_pipe(struct doca_flow_port *port, struct doca_flow_pipe *trap_
 
 	/* Create DOCA flow pipe */
 	/* XXX - create flow pipe
-	 * API-Reference: doca_flow_create_pipe() */
+	 * API-Reference: doca_flow_pipe_create() */
 
 	if (pipe)
 		DOCA_LOG_DBG("drop pipe created");
@@ -184,6 +187,7 @@ arp_sc_setup_trap_pipe(struct doca_flow_port *port, struct doca_flow_pipe *hairp
 	int queue_index;
 	struct doca_flow_match match;
 	struct doca_flow_actions actions;
+	struct doca_flow_actions *actions_array[1];
 	struct doca_flow_fwd fw, miss_fw;
 	struct doca_flow_pipe_cfg pipe_cfg;
 	struct doca_flow_pipe *pipe = NULL;
@@ -200,6 +204,7 @@ arp_sc_setup_trap_pipe(struct doca_flow_port *port, struct doca_flow_pipe *hairp
 	memset(&fw, 0, sizeof(fw));
 	memset(&miss_fw, 0, sizeof(miss_fw));
 	memset(&pipe_cfg, 0, sizeof(pipe_cfg));
+	actions_array[0] = &actions;
 
 	/* Configure queues for RSS */
 #define ARP_SC_TRAP_RSS_FLAGS DOCA_FLOW_RSS_IP
@@ -208,10 +213,11 @@ arp_sc_setup_trap_pipe(struct doca_flow_port *port, struct doca_flow_pipe *hairp
 		rss_queues[queue_index] = queue_index;
 
 	/* Populate pipe_cfg */
-	pipe_cfg.name = ARP_SC_TRAP_PIPE_NAME;
+	pipe_cfg.attr.name = ARP_SC_TRAP_PIPE_NAME;
+	pipe_cfg.attr.type = DOCA_FLOW_PIPE_BASIC;
 	pipe_cfg.match = &match;
 	pipe_cfg.port = port;
-	pipe_cfg.actions = &actions;
+	pipe_cfg.actions = actions_array;
 
 	/* Populate match -
 	 * DMAC=bcast_mac, eth_type=big_endian(0x806)
@@ -236,7 +242,7 @@ arp_sc_setup_trap_pipe(struct doca_flow_port *port, struct doca_flow_pipe *hairp
 
 	/* Create DOCA flow pipe */
 	/* XXX - create flow pipe
-	 * API-Reference: doca_flow_create_pipe() */
+	 * API-Reference: doca_flow_pipe_create() */
 
 	if (pipe) {
 		DOCA_LOG_DBG("trap pipe created");
@@ -266,6 +272,7 @@ arp_sc_setup_hairpin_pipe(struct doca_flow_port *port, uint16_t port_id)
 	struct doca_flow_match match;
 	struct doca_flow_fwd fw;
 	struct doca_flow_actions actions;
+	struct doca_flow_actions *actions_array[1];
 	struct doca_flow_pipe_cfg pipe_cfg;
 	struct doca_flow_pipe *pipe;
 	struct doca_flow_error err = {0};
@@ -276,17 +283,19 @@ arp_sc_setup_hairpin_pipe(struct doca_flow_port *port, uint16_t port_id)
 	memset(&actions, 0, sizeof(actions));
 	memset(&fw, 0, sizeof(fw));
 	memset(&pipe_cfg, 0, sizeof(pipe_cfg));
+	actions_array[0] = &actions;
 
-	pipe_cfg.name = "HAIRPIN_PIPE";
+	pipe_cfg.attr.name = "HAIRPIN_PIPE";
+	pipe_cfg.attr.type = DOCA_FLOW_PIPE_BASIC;
 	pipe_cfg.match = &match;
 
 	/* Traffic is hairpinned port-1<=>port-2 */
 	pipe_cfg.port = port;
-	pipe_cfg.actions = &actions;
+	pipe_cfg.actions = actions_array;
 	fw.type = DOCA_FLOW_FWD_PORT;
 	fw.port_id = port_id ^ 1;
 
-	pipe = doca_flow_create_pipe(&pipe_cfg, &fw, NULL, &err);
+	pipe = doca_flow_pipe_create(&pipe_cfg, &fw, NULL, &err);
 	if (pipe) {
 		DOCA_LOG_DBG("hairpin pipe created");
 	} else {

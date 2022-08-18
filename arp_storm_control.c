@@ -150,19 +150,14 @@ main(int argc, char **argv)
 	};
 
 	/* init and start parsing */
-	struct doca_argp_program_general_config *doca_general_config;
-	struct doca_argp_program_type_config type_config = {
-		.is_dpdk = true,
-		.is_grpc = false,
-	};
-
 	/* Parse cmdline/json arguments */
-	doca_argp_init("arp_storm_control", &type_config, &arp_sc_info);
+	doca_argp_init("arp_storm_control", &arp_sc_info);
+	doca_argp_set_dpdk_program(dpdk_init);
 	arp_sc_register_params();
-	doca_argp_start(argc, argv, &doca_general_config);
+	doca_argp_start(argc, argv);
 
 	/* update queues and ports */
-	dpdk_init(&dpdk_config);
+	dpdk_queues_and_ports_init(&dpdk_config);
 
 	/* init the app */
 	arp_sc_init(&dpdk_config);
