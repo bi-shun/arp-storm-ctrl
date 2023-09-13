@@ -22,6 +22,12 @@
 #include <doca_flow.h>
 #include <offload_rules.h>
 
+#define APP_EXIT(format, ...)                                   \
+        do {                                                    \
+                DOCA_LOG_ERR(format "\n", ##__VA_ARGS__);       \
+                exit(1);                                        \
+        } while (0)
+
 #ifdef __cplusplus
 extern "C" {
 #endif

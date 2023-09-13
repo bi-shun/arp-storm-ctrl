@@ -35,6 +35,16 @@
 #include "arp_storm_control_flow.h"
 #include "arp_storm_control_pkt.h"
 
+#define SET_MAC_ADDR(addr, a, b, c, d, e, f)\
+do {\
+        addr[0] = a & 0xff;\
+        addr[1] = b & 0xff;\
+        addr[2] = c & 0xff;\
+        addr[3] = d & 0xff;\
+        addr[4] = e & 0xff;\
+        addr[5] = f & 0xff;\
+} while (0)
+
 #define ARP_SC_MAX_COUNTERS 128
 #define ARP_SC_MAX_PORT_STR_LEN 128 /* Maximal length of port name */
 
@@ -72,6 +82,7 @@ arp_sc_delete_drop_flow(struct doca_flow_pipe_entry *entry)
 
 	/* XXX - remove doca flow pipe entry
 	 * API-Reference: doca_flow_pipe_rm_entry() */
+	doca_flow_pipe_rm_entry(ARP_SC_DROP_PIPE_Q, NULL, entry);
 }
 
 /* Add a sender MAC to the drop flow pipe */
@@ -97,6 +108,9 @@ arp_sc_create_drop_flow(struct doca_flow_pipe *drop_pipe, uint8_t *smac)
 	 * DMAC=bcast_mac, SMAC=variable_mac, eth_type=big_endian(0x806)
 	 */
 	/* XXX - populate match fields */
+	SET_MAC_ADDR(match.in_dst_mac, bcast_mac[0], bcast_mac[1], bcast_mac[2], bcast_mac[3], bcast_mac[4], bcast_mac[5]);
+	SET_MAC_ADDR(match.in_src_mac, smac[0], smac[1], smac[2], smac[3], smac[4], smac[5]);
+	match.in_eth_type = 0x806;
 
 	/* Count matching packets */
 	mon.flags = DOCA_FLOW_MONITOR_COUNT;
@@ -104,10 +118,11 @@ arp_sc_create_drop_flow(struct doca_flow_pipe *drop_pipe, uint8_t *smac)
 	/* Populate fw -
 	 * Drop matching packets */
 	/* XXX - populate fwd */
-
+	fw.type = DOCA_FLOW_FWD_DROP;
 	/* Add entry to the drop pipe */
 	/* XXX - add flow pipe entry using pipe_queue=ARP_SC_DROP_PIPE_Q
 	 * API-Reference: doca_flow_pipe_add_entry() */
+	entry = doca_flow_pipe_add_entry(ARP_SC_DROP_PIPE_Q, drop_pipe, &match, &actions, &mon, &fw, 0, NULL, &err);
 
 	if (doca_log_global_level_get() == DOCA_LOG_LEVEL_DEBUG) {
 		char smac_buf[RTE_ETHER_ADDR_FMT_SIZE];
@@ -156,20 +171,27 @@ arp_sc_setup_drop_pipe(struct doca_flow_port *port, struct doca_flow_pipe *trap_
 	 * DMAC=bcast_mac, SMAC=variable_mac, eth_type=big_endian(0x806)
 	 */
 	/* XXX - populate match */
+	SET_MAC_ADDR(match.in_dst_mac, bcast_mac[0], bcast_mac[1], bcast_mac[2], bcast_mac[3], bcast_mac[4], bcast_mac[5]);
+	SET_MAC_ADDR(match.in_src_mac, variable_mac[0], variable_mac[1], variable_mac[2], variable_mac[3], variable_mac[4], variable_mac[5]);
+	match.in_eth_type = 0x806;
 
 	/* Populate fw -
 	 * Drop matching packets */
 	/* XXX - populate fwd */
+	fw.type = DOCA_FLOW_FWD_DROP;
 
 	/* Populate miss_fw -
 	 * Packets that don't match the entries in the drop-pipe are sent to
 	 * the arp_trap_pipe
 	 */
 	/* XXX - populate pipe to jump to if there are no matching entries */
+	miss_fw.type = DOCA_FLOW_FWD_PIPE;
+	miss_fw.next_pipe = trap_pipe;
 
 	/* Create DOCA flow pipe */
 	/* XXX - create flow pipe
 	 * API-Reference: doca_flow_pipe_create() */
+	pipe = doca_flow_pipe_create(&pipe_cfg, &fw, &miss_fw, &err);
 
 	if (pipe)
 		DOCA_LOG_DBG("drop pipe created");
@@ -223,6 +245,8 @@ arp_sc_setup_trap_pipe(struct doca_flow_port *port, struct doca_flow_pipe *hairp
 	 * DMAC=bcast_mac, eth_type=big_endian(0x806)
 	 */
 	/* XXX - populate match */
+	SET_MAC_ADDR(match.in_dst_mac, bcast_mac[0], bcast_mac[1], bcast_mac[2], bcast_mac[3], bcast_mac[4], bcast_mac[5]);
+	match.in_eth_type = 0x806;
 
 	/* Populate RSS -
 	 * Send the packets to the rss_queues on the Arm cores.
@@ -231,18 +255,27 @@ arp_sc_setup_trap_pipe(struct doca_flow_port *port, struct doca_flow_pipe *hairp
 	 * identify the relevant packets.
 	 */
 	/* XXX - populate fwd */
-
+	fw.type = DOCA_FLOW_FWD_RSS;
+	fw.rss_flags = ARP_SC_TRAP_RSS_FLAGS;
+	fw.rss_queues = rss_queues;
+        fw.num_of_queues = arp_sc_info->nb_queues;
+	
 	/* actions - zero'ed, no packet modifications needed */
+	actions.meta.mark = ARP_SC_TRAP_RSS_MARK;
+
 
 	/* Populate miss_fw -
 	 * Packets that don't match the entries in the drop-pipe are sent to
 	 * the hairpin-pipe for port-0<=>port-1 forwarding.
 	 */
 	/* XXX - populate pipe to jump to if there no matching entries */
+	miss_fw.type = DOCA_FLOW_FWD_PIPE;
+	miss_fw.next_pipe = hairpin_pipe;
 
 	/* Create DOCA flow pipe */
 	/* XXX - create flow pipe
 	 * API-Reference: doca_flow_pipe_create() */
+	pipe = doca_flow_pipe_create(&pipe_cfg, &fw, &miss_fw, &err);
 
 	if (pipe) {
 		DOCA_LOG_DBG("trap pipe created");
@@ -255,6 +288,7 @@ arp_sc_setup_trap_pipe(struct doca_flow_port *port, struct doca_flow_pipe *hairp
 	/* Add HW offload ARP rule */
 	/* XXX - add flow pipe entry with pipe_queue=ARP_SC_TRAP_PIPE_Q
 	 * API-Reference: doca_flow_pipe_add_entry() */
+	entry = doca_flow_pipe_add_entry(ARP_SC_TRAP_PIPE_Q, pipe, &match, &actions, NULL, NULL, 0, NULL, &err);
 
 	if (entry)
 		DOCA_LOG_DBG("trap pipe entry created");
