@@ -110,7 +110,7 @@ arp_sc_create_drop_flow(struct doca_flow_pipe *drop_pipe, uint8_t *smac)
 	/* XXX - populate match fields */
 	SET_MAC_ADDR(match.in_dst_mac, bcast_mac[0], bcast_mac[1], bcast_mac[2], bcast_mac[3], bcast_mac[4], bcast_mac[5]);
 	SET_MAC_ADDR(match.in_src_mac, smac[0], smac[1], smac[2], smac[3], smac[4], smac[5]);
-	match.in_eth_type = 0x806;
+	match.in_eth_type = rte_cpu_to_be_16(0x806);
 
 	/* Count matching packets */
 	mon.flags = DOCA_FLOW_MONITOR_COUNT;
@@ -173,7 +173,7 @@ arp_sc_setup_drop_pipe(struct doca_flow_port *port, struct doca_flow_pipe *trap_
 	/* XXX - populate match */
 	SET_MAC_ADDR(match.in_dst_mac, bcast_mac[0], bcast_mac[1], bcast_mac[2], bcast_mac[3], bcast_mac[4], bcast_mac[5]);
 	SET_MAC_ADDR(match.in_src_mac, variable_mac[0], variable_mac[1], variable_mac[2], variable_mac[3], variable_mac[4], variable_mac[5]);
-	match.in_eth_type = 0x806;
+	match.in_eth_type = rte_cpu_to_be_16(0x806);
 
 	/* Populate fw -
 	 * Drop matching packets */
@@ -246,7 +246,7 @@ arp_sc_setup_trap_pipe(struct doca_flow_port *port, struct doca_flow_pipe *hairp
 	 */
 	/* XXX - populate match */
 	SET_MAC_ADDR(match.in_dst_mac, bcast_mac[0], bcast_mac[1], bcast_mac[2], bcast_mac[3], bcast_mac[4], bcast_mac[5]);
-	match.in_eth_type = 0x806;
+	match.in_eth_type = rte_cpu_to_be_16(0x806);
 
 	/* Populate RSS -
 	 * Send the packets to the rss_queues on the Arm cores.
