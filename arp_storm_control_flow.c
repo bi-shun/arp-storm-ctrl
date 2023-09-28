@@ -171,6 +171,7 @@ arp_sc_setup_drop_pipe(struct doca_flow_port *port, struct doca_flow_pipe *trap_
 	 * DMAC=bcast_mac, SMAC=variable_mac, eth_type=big_endian(0x806)
 	 */
 	/* XXX - populate match */
+	/* 2-tuple Match */
 	SET_MAC_ADDR(match.in_dst_mac, bcast_mac[0], bcast_mac[1], bcast_mac[2], bcast_mac[3], bcast_mac[4], bcast_mac[5]);
 	SET_MAC_ADDR(match.in_src_mac, variable_mac[0], variable_mac[1], variable_mac[2], variable_mac[3], variable_mac[4], variable_mac[5]);
 	match.in_eth_type = rte_cpu_to_be_16(0x806);
@@ -178,6 +179,7 @@ arp_sc_setup_drop_pipe(struct doca_flow_port *port, struct doca_flow_pipe *trap_
 	/* Populate fw -
 	 * Drop matching packets */
 	/* XXX - populate fwd */
+	/* last action if not forward action */
 	fw.type = DOCA_FLOW_FWD_DROP;
 
 	/* Populate miss_fw -
@@ -185,6 +187,7 @@ arp_sc_setup_drop_pipe(struct doca_flow_port *port, struct doca_flow_pipe *trap_
 	 * the arp_trap_pipe
 	 */
 	/* XXX - populate pipe to jump to if there are no matching entries */
+	/* not match any entries to forward*/
 	miss_fw.type = DOCA_FLOW_FWD_PIPE;
 	miss_fw.next_pipe = trap_pipe;
 
@@ -210,7 +213,7 @@ arp_sc_setup_trap_pipe(struct doca_flow_port *port, struct doca_flow_pipe *hairp
 	struct doca_flow_match match;
 	struct doca_flow_actions actions;
 	struct doca_flow_actions *actions_array[1];
-	struct doca_flow_fwd fw, miss_fw;
+	struct doca_flow_fwd fw, miss_fw, action_fw;
 	struct doca_flow_pipe_cfg pipe_cfg;
 	struct doca_flow_pipe *pipe = NULL;
 	struct doca_flow_error err = {0};
@@ -225,6 +228,7 @@ arp_sc_setup_trap_pipe(struct doca_flow_port *port, struct doca_flow_pipe *hairp
 	memset(&actions, 0, sizeof(actions));
 	memset(&fw, 0, sizeof(fw));
 	memset(&miss_fw, 0, sizeof(miss_fw));
+	memset(&action_fw, 0, sizeof(action_fw));
 	memset(&pipe_cfg, 0, sizeof(pipe_cfg));
 	actions_array[0] = &actions;
 
@@ -245,6 +249,8 @@ arp_sc_setup_trap_pipe(struct doca_flow_port *port, struct doca_flow_pipe *hairp
 	 * DMAC=bcast_mac, eth_type=big_endian(0x806)
 	 */
 	/* XXX - populate match */
+	/* 1-tuple match */
+	/* 只看dst_mac 去過濾 */
 	SET_MAC_ADDR(match.in_dst_mac, bcast_mac[0], bcast_mac[1], bcast_mac[2], bcast_mac[3], bcast_mac[4], bcast_mac[5]);
 	match.in_eth_type = rte_cpu_to_be_16(0x806);
 
@@ -255,10 +261,17 @@ arp_sc_setup_trap_pipe(struct doca_flow_port *port, struct doca_flow_pipe *hairp
 	 * identify the relevant packets.
 	 */
 	/* XXX - populate fwd */
-	fw.type = DOCA_FLOW_FWD_RSS;
-	fw.rss_flags = ARP_SC_TRAP_RSS_FLAGS;
-	fw.rss_queues = rss_queues;
-        fw.num_of_queues = arp_sc_info->nb_queues;
+	action_fw = DOCA_FLOW_FWD_RSS;
+	action_fw.type = DOCA_FLOW_FWD_RSS;
+	action_fw.rss_flags = ARP_SC_TRAP_RSS_FLAGS;
+	action_fw.rss_queues = rss_queues;
+    action_fw.num_of_queues = arp_sc_info->nb_queues;	
+
+	/* Drop */
+	fw.type = DOCA_FLOW_FWD_DROP;
+	// fw.rss_flags = ARP_SC_TRAP_RSS_FLAGS;
+	// fw.rss_queues = rss_queues;
+    // fw.num_of_queues = arp_sc_info->nb_queues;
 	
 	/* actions - zero'ed, no packet modifications needed */
 	actions.meta.mark = ARP_SC_TRAP_RSS_MARK;
@@ -288,7 +301,8 @@ arp_sc_setup_trap_pipe(struct doca_flow_port *port, struct doca_flow_pipe *hairp
 	/* Add HW offload ARP rule */
 	/* XXX - add flow pipe entry with pipe_queue=ARP_SC_TRAP_PIPE_Q
 	 * API-Reference: doca_flow_pipe_add_entry() */
-	entry = doca_flow_pipe_add_entry(ARP_SC_TRAP_PIPE_Q, pipe, &match, &actions, NULL, NULL, 0, NULL, &err);
+	/* 如果是廣播封包  Tag RSS MARK than send to rss queue */
+	entry = doca_flow_pipe_add_entry(ARP_SC_TRAP_PIPE_Q, pipe, &match, &actions, NULL, &action_fw, 0, NULL, &err);
 
 	if (entry)
 		DOCA_LOG_DBG("trap pipe entry created");
