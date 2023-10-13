@@ -34,9 +34,8 @@ endif
 app_dependencies = [dependency_libdpdk]
 app_dependencies += dependency('json-c', required : true)
 app_dependencies += dependency('threads', required : true)
-app_dependencies += dependency('doca-flow', required : true)
-app_dependencies += dependency('doca-argp', required : true)
-app_dependencies += dependency('doca-common', required : true)
+app_dependencies += dependency('doca')
+app_dependencies += dependency('libdpdk')
 
 common_dir_path = '../common/src'
 

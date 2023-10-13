@@ -26,6 +26,7 @@
 #include <rte_jhash.h>
 #include <rte_malloc.h>
 #include <rte_sft.h>
+#include <rte_arp.h>
 
 #include <doca_flow.h>
 #include <doca_log.h>

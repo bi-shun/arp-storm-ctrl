@@ -129,7 +129,7 @@ arp_sc_mac_entry_show(void)
 		arp_sc_mac_entry_flags_to_str(sc_mac_ent, flags_buf, sizeof(flags_buf));
 		memset(&query_stats, 0, sizeof(query_stats));
 		if (sc_mac_ent->drop_flow)
-			doca_flow_query(sc_mac_ent->drop_flow, &query_stats);
+			doca_flow_query_entry(sc_mac_ent->drop_flow, &query_stats);
 
 		fprintf(f, "%4u  %18s  %10u  %5s %5" PRIu64 "\n", sc_mac_ent->k.port, smac_buf, sc_mac_ent->ref_cnt, flags_buf, query_stats.total_pkts);
 	}

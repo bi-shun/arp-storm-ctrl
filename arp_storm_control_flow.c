@@ -90,7 +90,8 @@ struct doca_flow_pipe_entry *
 arp_sc_create_drop_flow(struct doca_flow_pipe *drop_pipe, uint8_t *smac)
 {
 	struct doca_flow_pipe_entry *entry = NULL;
-	__rte_unused struct doca_flow_error err = {0};
+	doca_error_t result;
+	// __rte_unused struct doca_flow_error err = {0};
 	struct doca_flow_match match;
 	struct doca_flow_actions actions;
 	struct doca_flow_monitor mon;
@@ -108,9 +109,9 @@ arp_sc_create_drop_flow(struct doca_flow_pipe *drop_pipe, uint8_t *smac)
 	 * DMAC=bcast_mac, SMAC=variable_mac, eth_type=big_endian(0x806)
 	 */
 	/* XXX - populate match fields */
-	SET_MAC_ADDR(match.in_dst_mac, bcast_mac[0], bcast_mac[1], bcast_mac[2], bcast_mac[3], bcast_mac[4], bcast_mac[5]);
-	SET_MAC_ADDR(match.in_src_mac, smac[0], smac[1], smac[2], smac[3], smac[4], smac[5]);
-	match.in_eth_type = rte_cpu_to_be_16(0x806);
+	SET_MAC_ADDR(match.outer.eth.dst_mac, bcast_mac[0], bcast_mac[1], bcast_mac[2], bcast_mac[3], bcast_mac[4], bcast_mac[5]);
+	SET_MAC_ADDR(match.outer.eth.src_mac, smac[0], smac[1], smac[2], smac[3], smac[4], smac[5]);
+	match.outer.eth.type = rte_cpu_to_be_16(0x806);
 
 	/* Count matching packets */
 	mon.flags = DOCA_FLOW_MONITOR_COUNT;
@@ -122,7 +123,7 @@ arp_sc_create_drop_flow(struct doca_flow_pipe *drop_pipe, uint8_t *smac)
 	/* Add entry to the drop pipe */
 	/* XXX - add flow pipe entry using pipe_queue=ARP_SC_DROP_PIPE_Q
 	 * API-Reference: doca_flow_pipe_add_entry() */
-	entry = doca_flow_pipe_add_entry(ARP_SC_DROP_PIPE_Q, drop_pipe, &match, &actions, &mon, &fw, 0, NULL, &err);
+	result = doca_flow_pipe_add_entry(ARP_SC_DROP_PIPE_Q, drop_pipe, &match, &actions, &mon, &fw, 0, NULL, &entry);
 
 	if (doca_log_global_level_get() == DOCA_LOG_LEVEL_DEBUG) {
 		char smac_buf[RTE_ETHER_ADDR_FMT_SIZE];
@@ -132,7 +133,7 @@ arp_sc_create_drop_flow(struct doca_flow_pipe *drop_pipe, uint8_t *smac)
 			DOCA_LOG_DBG("drop entry created for SMAC=%s", smac_buf);
 		else
 			DOCA_LOG_DBG("drop entry NOT created for SMAC=%s %s", smac_buf,
-					err.message ? err.message : "-");
+					result ? result : "-");
 	}
 
 	return entry;
@@ -143,12 +144,13 @@ struct doca_flow_pipe *
 arp_sc_setup_drop_pipe(struct doca_flow_port *port, struct doca_flow_pipe *trap_pipe, uint16_t portid)
 {
 	struct doca_flow_pipe *pipe = NULL;
-	struct doca_flow_error err = {0};
+	// struct doca_flow_error err = {0};
 	struct doca_flow_match match;
 	struct doca_flow_actions actions;
 	struct doca_flow_actions *actions_array[1];
 	struct doca_flow_fwd fw;
 	struct doca_flow_fwd miss_fw;
+	doca_error_t result;
 	struct doca_flow_pipe_cfg pipe_cfg;
 
 	/* Init ARP drop pipe fields */
@@ -172,9 +174,9 @@ arp_sc_setup_drop_pipe(struct doca_flow_port *port, struct doca_flow_pipe *trap_
 	 */
 	/* XXX - populate match */
 	/* 2-tuple Match */
-	SET_MAC_ADDR(match.in_dst_mac, bcast_mac[0], bcast_mac[1], bcast_mac[2], bcast_mac[3], bcast_mac[4], bcast_mac[5]);
-	SET_MAC_ADDR(match.in_src_mac, variable_mac[0], variable_mac[1], variable_mac[2], variable_mac[3], variable_mac[4], variable_mac[5]);
-	match.in_eth_type = rte_cpu_to_be_16(0x806);
+	SET_MAC_ADDR(match.outer.eth.dst_mac, bcast_mac[0], bcast_mac[1], bcast_mac[2], bcast_mac[3], bcast_mac[4], bcast_mac[5]);
+	SET_MAC_ADDR(match.outer.eth.src_mac, variable_mac[0], variable_mac[1], variable_mac[2], variable_mac[3], variable_mac[4], variable_mac[5]);
+	match.outer.eth.type = rte_cpu_to_be_16(0x806);
 
 	/* Populate fw -
 	 * Drop matching packets */
@@ -194,13 +196,13 @@ arp_sc_setup_drop_pipe(struct doca_flow_port *port, struct doca_flow_pipe *trap_
 	/* Create DOCA flow pipe */
 	/* XXX - create flow pipe
 	 * API-Reference: doca_flow_pipe_create() */
-	pipe = doca_flow_pipe_create(&pipe_cfg, &fw, &miss_fw, &err);
+	result = doca_flow_pipe_create(&pipe_cfg, &fw, &miss_fw, &pipe);
 
 	if (pipe)
 		DOCA_LOG_DBG("drop pipe created");
 	else
 		DOCA_LOG_DBG("drop pipe creation failed: %s",
-				err.message ? err.message : "-");
+				result ? result : "-");
 
 	return pipe;
 }
@@ -216,7 +218,8 @@ arp_sc_setup_trap_pipe(struct doca_flow_port *port, struct doca_flow_pipe *hairp
 	struct doca_flow_fwd fw, miss_fw, action_fw;
 	struct doca_flow_pipe_cfg pipe_cfg;
 	struct doca_flow_pipe *pipe = NULL;
-	struct doca_flow_error err = {0};
+	doca_error_t result;
+	//struct doca_flow_error err = {0};
 	__rte_unused uint16_t rss_queues[arp_sc_info->nb_queues];
 	struct doca_flow_pipe_entry *entry = NULL;
 	__rte_unused struct doca_flow_monitor *mon = NULL;
@@ -251,8 +254,8 @@ arp_sc_setup_trap_pipe(struct doca_flow_port *port, struct doca_flow_pipe *hairp
 	/* XXX - populate match */
 	/* 1-tuple match */
 	/* 只看dst_mac 去過濾 */
-	SET_MAC_ADDR(match.in_dst_mac, bcast_mac[0], bcast_mac[1], bcast_mac[2], bcast_mac[3], bcast_mac[4], bcast_mac[5]);
-	match.in_eth_type = rte_cpu_to_be_16(0x806);
+	SET_MAC_ADDR(match.outer.eth.dst_mac, bcast_mac[0], bcast_mac[1], bcast_mac[2], bcast_mac[3], bcast_mac[4], bcast_mac[5]);
+	match.outer.eth.type = rte_cpu_to_be_16(0x806);
 
 	/* Populate RSS -
 	 * Send the packets to the rss_queues on the Arm cores.
@@ -261,9 +264,8 @@ arp_sc_setup_trap_pipe(struct doca_flow_port *port, struct doca_flow_pipe *hairp
 	 * identify the relevant packets.
 	 */
 	/* XXX - populate fwd */
-	action_fw = DOCA_FLOW_FWD_RSS;
 	action_fw.type = DOCA_FLOW_FWD_RSS;
-	action_fw.rss_flags = ARP_SC_TRAP_RSS_FLAGS;
+	action_fw.rss_outer_flags = 7;
 	action_fw.rss_queues = rss_queues;
     action_fw.num_of_queues = arp_sc_info->nb_queues;	
 
@@ -288,13 +290,13 @@ arp_sc_setup_trap_pipe(struct doca_flow_port *port, struct doca_flow_pipe *hairp
 	/* Create DOCA flow pipe */
 	/* XXX - create flow pipe
 	 * API-Reference: doca_flow_pipe_create() */
-	pipe = doca_flow_pipe_create(&pipe_cfg, &fw, &miss_fw, &err);
+	result = doca_flow_pipe_create(&pipe_cfg, &fw, &miss_fw, &pipe);
 
 	if (pipe) {
 		DOCA_LOG_DBG("trap pipe created");
 	} else {
 		DOCA_LOG_DBG("trap pipe creation failed: %s",
-					err.message ? err.message : "-");
+					result ? result : "-");
 		return pipe;
 	}
 
@@ -302,13 +304,13 @@ arp_sc_setup_trap_pipe(struct doca_flow_port *port, struct doca_flow_pipe *hairp
 	/* XXX - add flow pipe entry with pipe_queue=ARP_SC_TRAP_PIPE_Q
 	 * API-Reference: doca_flow_pipe_add_entry() */
 	/* 如果是廣播封包  Tag RSS MARK than send to rss queue */
-	entry = doca_flow_pipe_add_entry(ARP_SC_TRAP_PIPE_Q, pipe, &match, &actions, NULL, &action_fw, 0, NULL, &err);
+	result = doca_flow_pipe_add_entry(ARP_SC_TRAP_PIPE_Q, pipe, &match, &actions, NULL, &action_fw, 0, NULL, &entry);
 
 	if (entry)
 		DOCA_LOG_DBG("trap pipe entry created");
 	else
 		DOCA_LOG_DBG("trap pipe entry creation failed: %s",
-					err.message ? err.message : "-");
+					result ? result : "-");
 
 	return pipe;
 }
@@ -322,8 +324,9 @@ arp_sc_setup_hairpin_pipe(struct doca_flow_port *port, uint16_t port_id)
 	struct doca_flow_actions actions;
 	struct doca_flow_actions *actions_array[1];
 	struct doca_flow_pipe_cfg pipe_cfg;
+	doca_error_t result;
 	struct doca_flow_pipe *pipe;
-	struct doca_flow_error err = {0};
+	// struct doca_flow_error err = {0};
 	struct doca_flow_pipe_entry *entry;
 
 	/* Single wildcard entry is added to the pipe to match all packets */
@@ -343,19 +346,19 @@ arp_sc_setup_hairpin_pipe(struct doca_flow_port *port, uint16_t port_id)
 	fw.type = DOCA_FLOW_FWD_PORT;
 	fw.port_id = port_id ^ 1;
 
-	pipe = doca_flow_pipe_create(&pipe_cfg, &fw, NULL, &err);
+	result = doca_flow_pipe_create(&pipe_cfg, &fw, NULL, &pipe);
 	if (pipe) {
 		DOCA_LOG_DBG("hairpin pipe created");
 	} else {
-		DOCA_LOG_ERR("hairpin pipe creation failed: %s", err.message);
+		DOCA_LOG_ERR("hairpin pipe creation failed: %s", result);
 		return pipe;
 	}
 
-	entry = doca_flow_pipe_add_entry(ARP_SC_HAIRPIN_PIPE_Q, pipe, &match, &actions, NULL, NULL, 0, NULL, &err);
+	result = doca_flow_pipe_add_entry(ARP_SC_HAIRPIN_PIPE_Q, pipe, &match, &actions, NULL, NULL, 0, NULL, &entry);
 	if (entry)
 		DOCA_LOG_DBG("hairpin pipe entry created");
 	else
-		DOCA_LOG_ERR("hairpin pipe entry creation failed: %s", err.message);
+		DOCA_LOG_ERR("hairpin pipe entry creation failed: %s", result);
 	return pipe;
 }
 
@@ -364,7 +367,8 @@ static struct doca_flow_port *
 arp_sc_port_init(struct doca_flow_port_cfg *port_cfg, uint8_t portid)
 {
 	char port_id_str[ARP_SC_MAX_PORT_STR_LEN];
-	struct doca_flow_error err = {0};
+	// struct doca_flow_error err = {0};
+	doca_error_t result;
 	struct doca_flow_port *port;
 
 	memset(port_cfg, 0, sizeof(*port_cfg));
@@ -372,9 +376,9 @@ arp_sc_port_init(struct doca_flow_port_cfg *port_cfg, uint8_t portid)
 	port_cfg->type = DOCA_FLOW_PORT_DPDK_BY_ID;
 	snprintf(port_id_str, ARP_SC_MAX_PORT_STR_LEN, "%d", port_cfg->port_id);
 	port_cfg->devargs = port_id_str;
-	port = doca_flow_port_start(port_cfg, &err);
+	result = doca_flow_port_start(port_cfg, &port);
 	if (port == NULL)
-		APP_EXIT("failed to initialize doca flow port: %s", err.message);
+		APP_EXIT("failed to initialize doca flow port: %s", result);
 	return port;
 }
 
@@ -391,12 +395,13 @@ arp_sc_close_port(uint16_t port_id)
 int
 arp_sc_flow_init(struct application_dpdk_config *dpdk_config)
 {
-	struct doca_flow_error err = {0};
+	// struct doca_flow_error err = {0};
 	struct doca_flow_cfg arp_sc_flow_cfg;
 	struct doca_flow_port *ports[dpdk_config->port_config.nb_ports];
 	struct doca_flow_port_cfg port_cfg;
 	struct doca_flow_pipe *hairpin_pipe;
 	struct doca_flow_pipe *trap_pipe;
+	doca_error_t result;
 	uint16_t portid;
 
 	memset(&arp_sc_flow_cfg, 0, sizeof(arp_sc_flow_cfg));
@@ -404,8 +409,8 @@ arp_sc_flow_init(struct application_dpdk_config *dpdk_config)
 	arp_sc_flow_cfg.queues = dpdk_config->port_config.nb_queues;
 	arp_sc_flow_cfg.resource.nb_counters = ARP_SC_MAX_COUNTERS;
 
-	if (doca_flow_init(&arp_sc_flow_cfg, &err) < 0) {
-		DOCA_LOG_ERR("failed to init doca: %s", err.message);
+	if (result = doca_flow_init(&arp_sc_flow_cfg) < 0) {
+		DOCA_LOG_ERR("failed to init doca: %s", result);
 		return -1;
 	}
 	DOCA_LOG_DBG("ARP SC DOCA flow init done");
